@@ -346,7 +346,7 @@ class Divider:
             try:
                 payload1 = str(email1.get_payload(0)).decode(charset1)
                 payload2 = str(email2.get_payload(0)).decode(charset2)
-            except UnicodeDecodeError: # Wrong encoding?
+            except: # Wrong encoding? Or just mangled? Who knows.
                 return False
             distance = simhash.Simhash(payload1).distance(simhash.Simhash(payload2))
             print("Similarity distance between messages is %s" % distance)
