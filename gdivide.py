@@ -326,6 +326,8 @@ class Divider:
 
         Currently just compares first part of payload content but in future will want to
         compare all payloads as the first bit may vary for legitimate reasons.
+
+        Returns `True` if `message1` and `message2` are duplicates, `False` otherwise
         """
         if message1['raw'] == message2['raw']:
             return True
@@ -341,8 +343,11 @@ class Divider:
                 return False
             charset1 = email1.get_payload(0).get_content_charset() or 'utf-8'
             charset2 = email2.get_payload(0).get_content_charset() or 'utf-8'
-            payload1 = str(email1.get_payload(0)).decode(charset1)
-            payload2 = str(email2.get_payload(0)).decode(charset2)
+            try:
+                payload1 = str(email1.get_payload(0)).decode(charset1)
+                payload2 = str(email2.get_payload(0)).decode(charset2)
+            except UnicodeDecodeError: # Wrong encoding?
+                return False
             distance = simhash.Simhash(payload1).distance(simhash.Simhash(payload2))
             print("Similarity distance between messages is %s" % distance)
             if distance < SIMHASH_DISTANCE: # MAGIC NUMBER - no idea what this should be
