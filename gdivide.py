@@ -8,6 +8,7 @@ import email
 import base64
 import simhash
 import io
+import time
 import googleapiclient
 
 from email.header import decode_header
@@ -93,7 +94,7 @@ def get_credentials(email, email_type="Unknown"):
         credentials = tools.run_flow(flow, store, flags)
         http = credentials.authorize(httplib2.Http())
         service = discovery.build('gmail', 'v1', http=http)
-        resp = service.users().getProfile(userId='me').execute()
+        resp = self._execute(service.users().getProfile(userId='me'), retries=0)
         if not resp['emailAddress'] == email:
             clear_credentials()
             print("ERROR: email address does not match credentials.")
@@ -149,7 +150,7 @@ class Divider:
         """
         if self._label:
             return self._label
-        resp = self.home_service.users().labels().list(userId='me').execute()
+        resp = self._execute(self.home_service.users().labels().list(userId='me'))
         for label in resp['labels']:
             if label['name'] == LABEL_NAME:
                 self._label = label
@@ -157,23 +158,23 @@ class Divider:
         if self.dry_run:
             print("Would have created label %s" % LABEL_NAME)
         else:
-            label = self.home_service.users().labels().create(userId='me',
+            label = self._execute(self.home_service.users().labels().create(userId='me',
                 body={
                     'messageListVisibility': 'hide',
                     'name': LABEL_NAME,
                     'labelListVisibility': 'labelHide',
-                }).execute()
+                }))
             print("Created label with id %s" % label['id'])
             self._label = label
         return self._label
 
     def _get_messages_page(self, service, query, page_token=None):
         print("Getting results page for query %s" % query)
-        return service.users().messages().list(
+        return self._execute(service.users().messages().list(
             userId='me',
             q=query,
             pageToken=page_token,
-        ).execute()
+        ))
 
     def _get_messages(self, service, query):
         all_messages = []
@@ -246,12 +247,12 @@ class Divider:
                 message_bytes = base64.urlsafe_b64decode(message['raw'].encode('ASCII'))
                 b.write(message_bytes)
                 media_body = googleapiclient.http.MediaIoBaseUpload(b, mimetype='message/rfc822')
-                resp = self.home_service.users().messages().insert(
+                resp = self._execute(self.home_service.users().messages().insert(
                     userId='me',
                     internalDateSource='dateHeader',
                     body=body,
                     media_body=media_body,
-                ).execute()
+                ))
                 self.stats_inserted += 1
                 # Add mapping between old and new threads
                 self.thread_map[message['threadId']] = resp['threadId']
@@ -273,8 +274,12 @@ class Divider:
 
     def trash_message(self, message_id):
         """Moves original message to trash"""
-        return self.work_service.users().messages().trash(userId='me',
-            id=message_id).execute()
+        return self._execute(
+            self.work_service.users().messages().trash(
+                userId='me',
+                id=message_id
+            )
+        )
 
     def get_raw_message(self, service, message_id):
         """
@@ -282,8 +287,11 @@ class Divider:
 
         Encoded raw form is available as `raw` key of returned dict
         """
-        message = service.users().messages().get(userId='me',
-            id=message_id, format='raw').execute()
+        try:
+            message = self._execute(service.users().messages().get(userId='me',
+                id=message_id, format='raw'))
+        except googleapiclient.errors.HttpError:
+            return None
         msg_str = base64.urlsafe_b64decode(message['raw'].encode('ASCII'))
         mime_msg = email.message_from_string(msg_str)
         message['decoded'] = mime_msg
@@ -329,6 +337,8 @@ class Divider:
 
         Returns `True` if `message1` and `message2` are duplicates, `False` otherwise
         """
+        if (not message1) or (not message2):
+            return False
         if message1['raw'] == message2['raw']:
             return True
         email1 = email.message_from_string(base64.urlsafe_b64decode(message1['raw'].encode('ASCII')))
@@ -367,6 +377,23 @@ class Divider:
         """This is a timestamp
         """
         return datetime.fromtimestamp(float(message['internalDate'])/1000)
+
+    def _execute(self, fn, retries=2, fail_hard=True):
+        try:
+            return fn.execute()
+        except googleapiclient.errors.HttpError as e:
+            if retries == 0:
+                if fail_hard:
+                    raise e
+                else:
+                    import ipdb; ipdb.set_trace()
+                    print('Error', e.message)
+                    return {'error': True}
+            elif retries > 0:
+                retries -= 1
+                time.sleep(5)
+                return self._execute(fn, retries=retries, fail_hard=fail_hard)
+
 
 
 def main():

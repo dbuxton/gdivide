@@ -30,7 +30,6 @@ Yes, with a bit of patience you can get the same result from using an IMAP clien
 *   Only works with GMail accounts
 *   May result in duplicates (if e.g. some messages were copied to, or forwarded from, your personal account). Tries to do deduplication using [simhash](https://github.com/leonsim/simhash) but YMMV. You can disable deduplication with the `--skip-deduplicate` option.
 *   Very wasteful in terms of requests - does several requests for each message rather than [batch API](https://developers.google.com/gmail/api/guides/batch)
-*   No error handling to speak of
 *   Only filtering by sender/addressee email address is supported. If you want to erase all mentions of a person from your email, you will have to send a PR ;)
 *   Does not alter backups or [Google Vault](https://www.google.com/work/apps/business/products/vault/) audit history of your email
 *   Not sure how/if it deals with chats
