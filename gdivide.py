@@ -137,7 +137,7 @@ class Divider:
         messages = resp['messages']
         if self.limit is not None:
             messages = messages[:self.limit]
-        bar = progressbar.ProgressBar(redirect_stdout=True, max_value=len(messages))
+        self.bar = progressbar.ProgressBar(redirect_stdout=True, max_value=len(messages))
         for i, message_id in enumerate(messages):
             if self.dry_run:
                 print(u"Moving message with id {} (dry run - no changes will be made!)".format(message_id))
@@ -145,7 +145,7 @@ class Divider:
                 print(u"Moving message with id {}".format(message_id))
             # Obeys `dry_run`
             self.move_message(message_id)
-            bar.update(i)
+            self.bar.update(i)
         print('Finished - created {} messages, trashed {}'.format(self.stats_inserted, self.stats_trashed))
 
     def get_or_create_label(self):
@@ -189,7 +189,10 @@ class Divider:
         while 'nextPageToken' in resp:
             resp = self._get_messages_page(self.work_service, query=query,
                 fields=fields, page_token=resp['nextPageToken'])
-            all_messages.extend(resp['messages'])
+            try:
+                all_messages.extend(resp['messages'])
+            except:
+                pass
         return all_messages
 
     def get_private_messages_from_work(self):
@@ -276,6 +279,7 @@ class Divider:
                 print(u"Trashing original message {}".format(message_id))
                 resp = self.trash_message(message_id)
                 self.stats_trashed += 1
+        self.bar.update()
 
     def trash_message(self, message_id):
         """Moves original message to trash"""
@@ -368,6 +372,7 @@ class Divider:
                 return False
             distance = simhash.Simhash(payload1).distance(simhash.Simhash(payload2))
             print(u"Similarity distance between messages is {}".format(distance))
+            self.bar.update()
             if distance < SIMHASH_DISTANCE: # MAGIC NUMBER - no idea what this should be
                 return True
             else:
