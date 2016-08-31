@@ -323,7 +323,7 @@ class Divider:
         """
         subject = self._get_subject(message)
         date = self._get_date(message)
-        from_date = date - timedelta(days=1)
+        from_date = date # sic
         to_date = date + timedelta(days=1)
         query = u"subject:\"{}\" after:{} before:{}".format(
             subject,
