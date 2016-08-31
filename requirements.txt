@@ -1,3 +1,4 @@
 google-api-python-client
 python-dateutil==1.5
 simhash>=1.6.2
+progressbar2

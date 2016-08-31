@@ -10,6 +10,7 @@ import simhash
 import io
 import time
 import googleapiclient
+import progressbar
 
 from email.header import decode_header
 from datetime import timedelta, datetime
@@ -78,13 +79,13 @@ def get_credentials(email, email_type="Unknown"):
     """
     if not os.path.exists(_credential_dir()):
         os.makedirs(_credential_dir())
-    credential_path = os.path.join(_credential_dir(), "%s.json" % email)
+    credential_path = os.path.join(_credential_dir(), "{}.json".format(email))
     store = oauth2client.file.Storage(credential_path)
     credentials = store.get()
     if not credentials or credentials.invalid:
-        print("************************************************************************")
-        print("Please authorize for your %s (%s) gmail account." % (email, email_type))
-        print("************************************************************************")
+        print(u"************************************************************************")
+        print(u"Please authorize for your {} ({}) gmail account.".format(email, email_type))
+        print(u"************************************************************************")
         flow = client.flow_from_clientsecrets(
             filename=CLIENT_SECRET_FILE,
             scope=SCOPES,
@@ -97,8 +98,8 @@ def get_credentials(email, email_type="Unknown"):
         resp = self._execute(service.users().getProfile(userId='me'), retries=0)
         if not resp['emailAddress'] == email:
             clear_credentials()
-            print("ERROR: email address does not match credentials.")
-            print("Stored credentials cleared - you will need to re-authenticate.")
+            print(u"ERROR: email address does not match credentials.")
+            print(u"Stored credentials cleared - you will need to re-authenticate.")
             sys.exit(1)
     return credentials
 
@@ -107,7 +108,7 @@ def clear_credentials():
     if os.path.exists(_credential_dir()):
         shutil.rmtree(_credential_dir(), ignore_errors=True)
     else:
-        print("No saved credentials found")
+        print(u"No saved credentials found")
     return sys.exit(0)
 
 
@@ -136,14 +137,16 @@ class Divider:
         messages = resp['messages']
         if self.limit is not None:
             messages = messages[:self.limit]
-        for message_id in messages:
+        bar = progressbar.ProgressBar(redirect_stdout=True, max_value=len(messages))
+        for i, message_id in enumerate(messages):
             if self.dry_run:
-                print("Moving message with id %s (dry run - no changes will be made!)" % message_id)
+                print(u"Moving message with id {} (dry run - no changes will be made!)".format(message_id))
             else:
-                print("Moving message with id %s" % message_id)
+                print(u"Moving message with id {}".format(message_id))
             # Obeys `dry_run`
             self.move_message(message_id)
-        print('Finished - created %s messages, trashed %s' % (self.stats_inserted, self.stats_trashed))
+            bar.update(i)
+        print('Finished - created {} messages, trashed {}'.format(self.stats_inserted, self.stats_trashed))
 
     def get_or_create_label(self):
         """Ensures that uploaded messages have the gdivide label set
@@ -156,7 +159,7 @@ class Divider:
                 self._label = label
                 return self._label
         if self.dry_run:
-            print("Would have created label %s" % LABEL_NAME)
+            print(u"Would have created label {}".format(LABEL_NAME).encode('utf-8'))
         else:
             label = self._execute(self.home_service.users().labels().create(userId='me',
                 body={
@@ -164,26 +167,28 @@ class Divider:
                     'name': LABEL_NAME,
                     'labelListVisibility': 'labelHide',
                 }))
-            print("Created label with id %s" % label['id'])
+            print(u"Created label with id {}".format(label['id']))
             self._label = label
         return self._label
 
-    def _get_messages_page(self, service, query, page_token=None):
-        print("Getting results page for query %s" % query)
-        return self._execute(service.users().messages().list(
+    def _get_messages_page(self, service, query, fields=None, page_token=None):
+        print(u"Getting results page for query {}".format(query).encode('utf-8'))
+        resp = self._execute(service.users().messages().list(
             userId='me',
             q=query,
             pageToken=page_token,
+            fields=fields,
         ))
+        return resp
 
-    def _get_messages(self, service, query):
+    def _get_messages(self, service, query, fields=None):
         all_messages = []
-        resp = self._get_messages_page(service, query)
+        resp = self._get_messages_page(service, query=query, fields=fields)
         if 'messages' in resp:
             all_messages.extend(resp['messages'])
         while 'nextPageToken' in resp:
-            resp = self._get_messages_page(self.work_service, query,
-                resp['nextPageToken'])
+            resp = self._get_messages_page(self.work_service, query=query,
+                fields=fields, page_token=resp['nextPageToken'])
             all_messages.extend(resp['messages'])
         return all_messages
 
@@ -195,13 +200,13 @@ class Divider:
         all_messages = []
         for correspondent in self.private_correspondents:
             for direction in DIRECTIONS:
-                query = '%s:%s' % (direction, correspondent)
+                query = u'{}:{}'.format(direction, correspondent)
                 all_messages.extend(self._get_messages(self.work_service, query))
         all_threads = [i['threadId'] for i in all_messages]
         all_threads = list(set(all_threads))
         all_messages = [i['id'] for i in all_messages]
         all_messages = list(set(all_messages))
-        print("Found %s messages (%s threads) sent %s %s" % (
+        print(u"Found {} messages ({} threads) sent {} {}".format(
             len(all_messages),
             len(all_threads),
             '/'.join(DIRECTIONS),
@@ -231,11 +236,11 @@ class Divider:
                 thread_id = None
 
             if self.dry_run:
-                print("Would have inserted message id %s: (size %d) %s" % (message_id,
-                    len(message['raw']), message['snippet'],))
+                print(u"Would have inserted message id {}: (size {}) {}".format(message_id,
+                    len(message['raw']), message['snippet']).encode('utf-8'))
             else:
-                print("Inserting message id %s: %s" % (message_id,
-                    message['snippet']))
+                print(u"Inserting message id {}: {}".format(message_id,
+                    message['snippet']).encode('utf-8'))
                 attachments = []
                 raw = message['raw']
                 body = {
@@ -257,18 +262,18 @@ class Divider:
                 # Add mapping between old and new threads
                 self.thread_map[message['threadId']] = resp['threadId']
             if self.dry_run:
-                print("Would have trashed original message %s" % (message_id,))
+                print(u"Would have trashed original message {}".format(message_id))
             else:
-                print("Trashing original message %s" % (message_id,))
+                print(u"Trashing original message {}".format(message_id))
                 resp = self.trash_message(message_id)
                 self.stats_trashed += 1
         else:
-            print("Skipping message id %s: found duplicate %s in target" % (
+            print(u"Skipping message id {}: found duplicate {} in target".format(
                 message_id, duplicate))
             if self.dry_run:
-                print("Would have trashed original message %s" % (message_id,))
+                print(u"Would have trashed original message {}".format(message_id))
             else:
-                print("Trashing original message %s" % (message_id,))
+                print(u"Trashing original message {}".format(message_id))
                 resp = self.trash_message(message_id)
                 self.stats_trashed += 1
 
@@ -316,12 +321,15 @@ class Divider:
         date = self._get_date(message)
         from_date = date - timedelta(days=1)
         to_date = date + timedelta(days=1)
-        query = "subject:\"%s\" after:%s before:%s" % (
+        query = u"subject:\"{}\" after:{} before:{}".format(
             subject,
             from_date.strftime('%Y/%m/%d'),
             to_date.strftime('%Y/%m/%d'),
         )
-        similar_messages = self._get_messages(self.home_service, query=query)
+        similar_messages = self._get_messages(
+            self.home_service,
+            query=query,
+        )
         if similar_messages:
             for pd in similar_messages:
                 potential_duplicate = self.get_raw_message(self.home_service, pd['id'])
@@ -359,7 +367,7 @@ class Divider:
             except: # Wrong encoding? Or just mangled? Who knows.
                 return False
             distance = simhash.Simhash(payload1).distance(simhash.Simhash(payload2))
-            print("Similarity distance between messages is %s" % distance)
+            print(u"Similarity distance between messages is {}".format(distance))
             if distance < SIMHASH_DISTANCE: # MAGIC NUMBER - no idea what this should be
                 return True
             else:
@@ -369,9 +377,13 @@ class Divider:
 
     def _get_subject(self, message):
         for h, v in message['decoded'].items():
-            if h.lower() == 'subject':
-                return v
-        return ""
+            if h.lower() == u'subject':
+                try:
+                    res = email.header.decode_header(v)
+                    return res[0][0].decode(res[0][1])
+                except:
+                    return v
+        return u""
 
     def _get_date(self, message):
         """This is a timestamp
@@ -383,13 +395,14 @@ class Divider:
             return fn.execute()
         except googleapiclient.errors.HttpError as e:
             if retries == 0:
-                if fail_hard:
+                if fail_hard is True:
                     raise e
                 else:
                     import ipdb; ipdb.set_trace()
-                    print('Error', e.message)
+                    print(u'Error', e.message)
                     return {'error': True}
             elif retries > 0:
+                print(u'Retrying failed GMail API request')
                 retries -= 1
                 time.sleep(5)
                 return self._execute(fn, retries=retries, fail_hard=fail_hard)
@@ -399,7 +412,7 @@ class Divider:
 def main():
     if flags.clear_credentials:
         clear_credentials()
-        print('Credentials cleared!')
+        print(u'Credentials cleared!')
     else:
         client = Divider(
             home_credentials=get_credentials(email=flags.home_gmail,
