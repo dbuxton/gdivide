@@ -11,7 +11,10 @@ import io
 import time
 import googleapiclient
 import progressbar
+import urllib
+import re
 
+from six.moves.html_parser import HTMLParser
 from email.header import decode_header
 from datetime import timedelta, datetime
 from dateutil.parser import parse
@@ -145,7 +148,7 @@ class Divider:
                 print(u"Moving message with id {}".format(message_id))
             # Obeys `dry_run`
             self.move_message(message_id)
-            self.bar.update(i)
+            self.bar.update(i + 1)
         print('Finished - created {} messages, trashed {}'.format(self.stats_inserted, self.stats_trashed))
 
     def get_or_create_label(self):
@@ -171,7 +174,7 @@ class Divider:
             self._label = label
         return self._label
 
-    def _get_messages_page(self, service, query, fields=None, page_token=None):
+    def _get_messages_page(self, service, query, fields=None, page_token=None, obey_limit=False):
         print(u"Getting results page for query {}".format(query).encode('utf-8'))
         resp = self._execute(service.users().messages().list(
             userId='me',
@@ -181,7 +184,7 @@ class Divider:
         ))
         return resp
 
-    def _get_messages(self, service, query, fields=None):
+    def _get_messages(self, service, query, fields=None, obey_limit=True):
         all_messages = []
         resp = self._get_messages_page(service, query=query, fields=fields)
         if 'messages' in resp:
@@ -193,6 +196,9 @@ class Divider:
                 all_messages.extend(resp['messages'])
             except:
                 pass
+            if self.limit:
+                if obey_limit is True and len(all_messages) >= self.limit:
+                    break
         return all_messages
 
     def get_private_messages_from_work(self):
@@ -204,7 +210,7 @@ class Divider:
         for correspondent in self.private_correspondents:
             for direction in DIRECTIONS:
                 query = u'{}:{}'.format(direction, correspondent)
-                all_messages.extend(self._get_messages(self.work_service, query))
+                all_messages.extend(self._get_messages(self.work_service, query, obey_limit=True))
         all_threads = [i['threadId'] for i in all_messages]
         all_threads = list(set(all_threads))
         all_messages = [i['id'] for i in all_messages]
@@ -240,10 +246,10 @@ class Divider:
 
             if self.dry_run:
                 print(u"Would have inserted message id {}: (size {}) {}".format(message_id,
-                    len(message['raw']), message['snippet']).encode('utf-8'))
+                    len(message['raw']), self._get_snippet(message)).encode('utf-8'))
             else:
                 print(u"Inserting message id {}: {}".format(message_id,
-                    message['snippet']).encode('utf-8'))
+                    self._get_snippet(message)).encode('utf-8'))
                 attachments = []
                 raw = message['raw']
                 body = {
@@ -323,12 +329,15 @@ class Divider:
         """
         subject = self._get_subject(message)
         date = self._get_date(message)
+        snippet = self._get_snippet(message)
         from_date = date # sic
         to_date = date + timedelta(days=1)
-        query = u"subject:\"{}\" after:{} before:{}".format(
-            subject,
+        clean_pattern = r'[^\w\s0-9\']'
+        query = u"subject:\"{}\" after:{} before:{} \"{}\"".format(
+            re.sub(clean_pattern, ' ', subject),
             from_date.strftime('%Y/%m/%d'),
             to_date.strftime('%Y/%m/%d'),
+            re.sub(clean_pattern, ' ', snippet),
         )
         similar_messages = self._get_messages(
             self.home_service,
@@ -394,6 +403,13 @@ class Divider:
         """This is a timestamp
         """
         return datetime.fromtimestamp(float(message['internalDate'])/1000)
+
+    def _get_snippet(self, message):
+        """
+        """
+        h = HTMLParser()
+        unescaped = h.unescape(message['snippet'])
+        return unescaped
 
     def _execute(self, fn, retries=2, fail_hard=True):
         try:
