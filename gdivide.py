@@ -232,6 +232,10 @@ class Divider:
         Unless --skip-deduplicate is set, this will check for duplicates by:
         """
         message = self.get_raw_message(self.work_service, message_id)
+        if u'CHAT' in message[u'labelIds']:
+            print(u'Skipping chat message [id {}]'.format(message_id))
+            self.bar.update()
+            return
         duplicate = None
         # If not a duplicate or checking turned off, put message and
         # delete original
@@ -245,10 +249,10 @@ class Divider:
                 thread_id = None
 
             if self.dry_run:
-                print(u"Would have inserted message id {}: (size {}) {}".format(message_id,
+                print(u"Would have inserted message [id {}]: (size {}) {}".format(message_id,
                     len(message['raw']), self._get_snippet(message)).encode('utf-8'))
             else:
-                print(u"Inserting message id {}: {}".format(message_id,
+                print(u"Inserting message [id {}]: {}".format(message_id,
                     self._get_snippet(message)).encode('utf-8'))
                 attachments = []
                 raw = message['raw']
@@ -271,18 +275,18 @@ class Divider:
                 # Add mapping between old and new threads
                 self.thread_map[message['threadId']] = resp['threadId']
             if self.dry_run:
-                print(u"Would have trashed original message {}".format(message_id))
+                print(u"Would have trashed original message [id {}]".format(message_id))
             else:
                 print(u"Trashing original message {}".format(message_id))
                 resp = self.trash_message(message_id)
                 self.stats_trashed += 1
         else:
-            print(u"Skipping message id {}: found duplicate {} in target".format(
+            print(u"Skipping message [id {}]: found duplicate {} in target".format(
                 message_id, duplicate))
             if self.dry_run:
-                print(u"Would have trashed original message {}".format(message_id))
+                print(u"Would have trashed original message [id {}]".format(message_id))
             else:
-                print(u"Trashing original message {}".format(message_id))
+                print(u"Trashing original message [id {}]".format(message_id))
                 resp = self.trash_message(message_id)
                 self.stats_trashed += 1
         self.bar.update()

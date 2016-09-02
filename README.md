@@ -32,7 +32,7 @@ Yes, with a bit of patience you can get the same result from using an IMAP clien
 *   Very wasteful in terms of requests - does several requests for each message rather than [batch API](https://developers.google.com/gmail/api/guides/batch)
 *   Only filtering by sender/addressee email address is supported. If you want to erase all mentions of a person from your email, you will have to send a PR ;)
 *   Does not alter backups or [Google Vault](https://www.google.com/work/apps/business/products/vault/) audit history of your email
-*   Not sure how/if it deals with chats
+*   Doesn't transfer or delete chats - you will have to do that manually
 *   You may hit GMail API rate limits (`429` errors)
 
 ## Lack of warranty
