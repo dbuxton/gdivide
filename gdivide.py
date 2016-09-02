@@ -336,7 +336,7 @@ class Divider:
         snippet = self._get_snippet(message)
         from_date = date # sic
         to_date = date + timedelta(days=1)
-        clean_pattern = r'[^\w\s0-9\']'
+        clean_pattern = r'(?u)[^\w\s0-9\']'
         query = u"subject:\"{}\" after:{} before:{} \"{}\"".format(
             re.sub(clean_pattern, ' ', subject),
             from_date.strftime('%Y/%m/%d'),
