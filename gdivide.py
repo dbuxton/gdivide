@@ -143,9 +143,9 @@ class Divider:
         self.bar = progressbar.ProgressBar(redirect_stdout=True, max_value=len(messages))
         for i, message_id in enumerate(messages):
             if self.dry_run:
-                print(u"Moving message with id {} (dry run - no changes will be made!)".format(message_id))
+                print(u"Moving message [id {}] (dry run - no changes will be made!)".format(message_id))
             else:
-                print(u"Moving message with id {}".format(message_id))
+                print(u"Moving message [id {}]".format(message_id))
             # Obeys `dry_run`
             self.move_message(message_id)
             self.bar.update(i + 1)
@@ -175,7 +175,7 @@ class Divider:
         return self._label
 
     def _get_messages_page(self, service, query, fields=None, page_token=None, obey_limit=False):
-        print(u"Getting results page for query {}".format(query).encode('utf-8'))
+        print(u"Getting results page for query [{}]".format(query).encode('utf-8'))
         resp = self._execute(service.users().messages().list(
             userId='me',
             q=query,
@@ -209,7 +209,7 @@ class Divider:
         all_messages = []
         for correspondent in self.private_correspondents:
             for direction in DIRECTIONS:
-                query = u'{}:{}'.format(direction, correspondent)
+                query = u'{}:{} !in:chats'.format(direction, correspondent)
                 all_messages.extend(self._get_messages(self.work_service, query, obey_limit=True))
         all_threads = [i['threadId'] for i in all_messages]
         all_threads = list(set(all_threads))
