@@ -13,8 +13,8 @@ import googleapiclient
 import progressbar
 import urllib
 import re
+import html
 
-from six.moves.html_parser import HTMLParser
 from email.header import decode_header
 from datetime import timedelta, datetime
 from dateutil.parser import parse
@@ -98,7 +98,7 @@ def get_credentials(email, email_type="Unknown"):
         credentials = tools.run_flow(flow, store, flags)
         http = credentials.authorize(httplib2.Http())
         service = discovery.build('gmail', 'v1', http=http)
-        resp = self._execute(service.users().getProfile(userId='me'), retries=0)
+        resp = service.users().getProfile(userId='me').execute()
         if not resp['emailAddress'] == email:
             clear_credentials()
             print(u"ERROR: email address does not match credentials.")
@@ -149,7 +149,7 @@ class Divider:
             # Obeys `dry_run`
             self.move_message(message_id)
             self.bar.update(i + 1)
-        print('Finished - created {} messages, trashed {}'.format(self.stats_inserted, self.stats_trashed))
+        print(u'Finished - created {} messages, trashed {}'.format(self.stats_inserted, self.stats_trashed))
 
     def get_or_create_label(self):
         """Ensures that uploaded messages have the gdivide label set
@@ -175,7 +175,7 @@ class Divider:
         return self._label
 
     def _get_messages_page(self, service, query, fields=None, page_token=None, obey_limit=False):
-        print(u"Getting results page for query [{}]".format(query).encode('utf-8'))
+        print(u"Getting results page for query [{}]".format(query.encode('utf-8')))
         resp = self._execute(service.users().messages().list(
             userId='me',
             q=query,
@@ -229,20 +229,22 @@ class Divider:
     def move_message(self, message_id):
         """Moves a message FROM work TO home email.
 
-        Unless --skip-deduplicate is set, this will check for duplicates by:
+        Unless --skip-deduplicate is set, this will check for duplicates
         """
         message = self.get_raw_message(self.work_service, message_id)
-        if u'CHAT' in message[u'labelIds']:
-            print(u'Skipping chat message [id {}]'.format(message_id))
-            self.bar.update()
-            return
+        if u'labelIds' not in message:
+            print(u'Message id [{}] does not include `labelIds` metadata'.format(message_id))
+        else:
+            if u'CHAT' in message[u'labelIds']:
+                print(u'Skipping chat message id [{}]'.format(message_id))
+                self.bar.update()
+                return
         duplicate = None
         # If not a duplicate or checking turned off, put message and
         # delete original
         if not self.skip_deduplicate:
             duplicate = self.check_duplicate(message)
         if self.skip_deduplicate or not duplicate:
-
             if message['threadId'] in self.thread_map:
                 thread_id = self.thread_map[message['threadId']]
             else:
@@ -253,25 +255,39 @@ class Divider:
                     len(message['raw']), self._get_snippet(message)).encode('utf-8'))
             else:
                 print(u"Inserting message [id {}]: {}".format(message_id,
-                    self._get_snippet(message)).encode('utf-8'))
+                    self._get_snippet(message).encode('utf-8')))
                 attachments = []
-                raw = message['raw']
                 body = {
                     'labelIds': [self.get_or_create_label()['id']],
                 }
                 if thread_id:
                     body['threadId'] = thread_id
                 b = io.BytesIO()
-                message_bytes = base64.urlsafe_b64decode(message['raw'].encode('ASCII'))
+                message_bytes = base64.urlsafe_b64decode(message['raw']).decode('utf-8', 'replace').encode('utf-8')
                 b.write(message_bytes)
                 media_body = googleapiclient.http.MediaIoBaseUpload(b, mimetype='message/rfc822')
-                resp = self._execute(self.home_service.users().messages().insert(
-                    userId='me',
-                    internalDateSource='dateHeader',
-                    body=body,
-                    media_body=media_body,
-                ))
-                self.stats_inserted += 1
+                try:
+                    resp = self._execute(self.home_service.users().messages().insert(
+                        userId='me',
+                        internalDateSource='dateHeader',
+                        body=body,
+                        media_body=media_body,
+                    ))
+                    self.stats_inserted += 1
+                except UnicodeEncodeError as e:
+                    print(u"Got an encoding error uploading - retrying with XML characters")
+                    print(e)
+                    b = io.BytesIO()
+                    message_bytes = base64.urlsafe_b64decode(message['raw']).decode('utf-8', 'replace').encode('ascii', 'xmlcharrefreplace')
+                    b.write(message_bytes)
+                    media_body = googleapiclient.http.MediaIoBaseUpload(b, mimetype='message/rfc822')
+                    resp = self._execute(self.home_service.users().messages().insert(
+                        userId='me',
+                        internalDateSource='dateHeader',
+                        body=body,
+                        media_body=media_body,
+                    ))
+                    self.stats_inserted += 1
                 # Add mapping between old and new threads
                 self.thread_map[message['threadId']] = resp['threadId']
             if self.dry_run:
@@ -311,7 +327,7 @@ class Divider:
                 id=message_id, format='raw'))
         except googleapiclient.errors.HttpError:
             return None
-        msg_str = base64.urlsafe_b64decode(message['raw'].encode('ASCII'))
+        msg_str = str(base64.urlsafe_b64decode(message['raw'].encode('ASCII')))
         mime_msg = email.message_from_string(msg_str)
         message['decoded'] = mime_msg
         return message
@@ -366,8 +382,8 @@ class Divider:
             return False
         if message1['raw'] == message2['raw']:
             return True
-        email1 = email.message_from_string(base64.urlsafe_b64decode(message1['raw'].encode('ASCII')))
-        email2 = email.message_from_string(base64.urlsafe_b64decode(message2['raw'].encode('ASCII')))
+        email1 = email.message_from_string(str(base64.urlsafe_b64decode(message1['raw'].encode('ASCII'))))
+        email2 = email.message_from_string(str(base64.urlsafe_b64decode(message2['raw'].encode('ASCII'))))
         if (not email1.is_multipart()) and (not email2.is_multipart()):
             if email1.get_payload() == email2.get_payload():
                 return True
@@ -411,8 +427,7 @@ class Divider:
     def _get_snippet(self, message):
         """
         """
-        h = HTMLParser()
-        unescaped = h.unescape(message['snippet'])
+        unescaped = html.unescape(message['snippet'])
         return unescaped
 
     def _execute(self, fn, retries=2, fail_hard=True):

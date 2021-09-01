@@ -1,18 +1,14 @@
 # GDivide
 
-A simple command-line tool to divide your personal GMail from your work
-Google Apps/GMail account. Remove personal messages from your work accounts while still keeping them available in the cloud.
+A simple command-line tool to divide your personal GMail from your work Google Apps/GMail account. Remove personal messages from your work accounts while still keeping them available in the cloud.
 
 Uses the [GMail API](https://developers.google.com/gmail/api/v1/reference).
 
 ## Why use
 
-You have a work email on Google Apps and a personal GMail (or Google Apps)
-account. Your significant other (or mother, or dogsitter) sometimes sends you stuff to
-your work address, which you want to keep, but don't want your
-assistant/auditor/etc to see.
+You have a work email on Google Apps and a personal GMail (or Google Apps) account. Your significant other (or mother, or dogsitter) sometimes sends you stuff to your work address, which you want to keep, but don't want to share with your assistant/auditor/etc.
 
-This tool lets you move personal messages that have somehow leaked into your work account back to your personal account. It maintains threads and tries to do some deduplication based on message content.
+This tool lets you move personal messages that have somehow leaked into your work account back to your personal account. It maintains threads and tries (pretty successfully) to deduplicate based on message content. 
 
 Essentially all GDivide does is:
 
@@ -23,12 +19,16 @@ Essentially all GDivide does is:
 
 ### Why not use [Thunderbird, Outlook, another IMAP client] instead?
 
-Yes, with a bit of patience you can get the same result from using an IMAP client to transfer messages. However things like correct date display on imported messages can be a crapshoot, and processing large numbers of messages in Thunderbird or Outlook is no fun.
+With a bit of patience you can get the same result from using an IMAP client to transfer messages. 
+However things like correct date display on imported messages can be a crapshoot, and processing 
+large numbers (or even small numbers) of messages in Thunderbird or Outlook is no fun.
+
+This tool does not work perfectly but it's much better than dragging 5,000 messages between Outlook mailboxes.
 
 ## Limitations
 
 *   Only works with GMail accounts
-*   May result in duplicates (if e.g. some messages were copied to, or forwarded from, your personal account). Tries to do deduplication using [simhash](https://github.com/leonsim/simhash) but YMMV. You can disable deduplication with the `--skip-deduplicate` option.
+*   May result in duplicates (if e.g. some work-account messages were copied to, or forwarded from, your personal account). Tries to do deduplication using [simhash](https://github.com/leonsim/simhash) but YMMV. You can disable deduplication with the `--skip-deduplicate` option.
 *   Very wasteful in terms of requests - does several requests for each message rather than [batch API](https://developers.google.com/gmail/api/guides/batch)
 *   Only filtering by sender/addressee email address is supported. If you want to erase all mentions of a person from your email, you will have to send a PR ;)
 *   Does not alter backups or [Google Vault](https://www.google.com/work/apps/business/products/vault/) audit history of your email
@@ -37,7 +37,7 @@ Yes, with a bit of patience you can get the same result from using an IMAP clien
 
 ## Lack of warranty
 
-This tool will make changes to BOTH email accounts that you give it. It may result in you losing data (although it doesn't delete anything directly, just moves to trash, so you should be able to undo any changes if you need to as long as you move quick-ish). You should make sure you have backups of any important data before using it. If you want to get a full dump of your email data you can do so via [Google Takeout](https://www.google.com/settings/takeout).
+By default (see **Options** below) `gdivide` will make changes to BOTH email accounts that you give it. It may result in you losing data (although it doesn't delete anything irrevocably, just moves to trash, so you should be able to undo any changes if you need to as long as you move quick-ish). You should make sure you have backups of any important data before using it. If you want to get a full dump of your email data you can do so via [Google Takeout](https://www.google.com/settings/takeout).
 
 I take no responsibility for any damage resulting from use of this tool, howsoever caused, including by negligence.
 
@@ -81,13 +81,13 @@ I am distributing this app with oauth secret available in the code. I may revoke
 
 IMAP is a pain, and I wanted to see if the GMail API was any better.
 
-The short story is, yes and no. In practice you seem to have to learn about MIME encodings, multipart email structures and a load of other things to do anything remotely useful.
+The short story is, yes and no. In practice you seem to have to learn about MIME encodings, multipart email structures and a load of other things to do anything remotely useful, and the documentation leaves a lot to be desired.
 
 However if you want to do simple things, it's a lot easier to understand than IMAP.
 
 ## License
 
-Copyright (c) 2016 David Buxton
+Copyright (c) 2021 David Buxton
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
