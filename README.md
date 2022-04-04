@@ -85,6 +85,10 @@ The short story is, yes and no. In practice you seem to have to learn about MIME
 
 However if you want to do simple things, it's a lot easier to understand than IMAP.
 
+## Privacy
+
+This app doesn't collect any data from users. You do need to sign in with Google to use it, and what they do with your data is between you and them.
+
 ## License
 
 Copyright (c) 2021 David Buxton
