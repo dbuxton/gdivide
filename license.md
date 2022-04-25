@@ -1,4 +1,4 @@
-## License
+# License
 
 Copyright (c) 2022 David Buxton
 
